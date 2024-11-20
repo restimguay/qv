@@ -27,64 +27,160 @@
     <div id="app" class="container"></div>
 
     <script>
-        // Wait for DOM to be ready
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                // Data
-                const data = {
-                    title: "Developer Profile",
-                    description: "Senior Software Developer",
-                    skills: [
-                        { name: "JavaScript", level: "Expert" },
-                        { name: "Python", level: "Intermediate" },
-                        { name: "React", level: "Advanced" }
-                    ]
-                };
+        class Directives {
+            constructor(data) {
+                this.data = data || {};
+            }
 
-                // Simple render function
-                function render() {
-                    const app = document.getElementById('app');
-                    if (!app) return;
+            // Process text directive
+            processText(element) {
+                const path = element.getAttribute('--text');
+                if (!path) return;
 
-                    let html = `
-                        <div class="card">
-                            <h1>${data.title}</h1>
-                            <p>${data.description}</p>
-                            
-                            <h3>Skills</h3>
-                            <div>
-                                ${data.skills.map(skill => `
-                                    <span class="tag">
-                                        ${skill.name}: ${skill.level}
-                                    </span>
-                                `).join('')}
+                const value = this.getValueFromPath(path);
+                element.textContent = value ?? '';
+            }
+
+            // Process for directive
+            processFor(element) {
+                const forExpr = element.getAttribute('--for');
+                if (!forExpr) return;
+
+                const parts = forExpr.split(/\s+in\s+/);
+                if (parts.length !== 2) return;
+
+                const [itemName, arrayPath] = parts;
+                const array = this.getValueFromPath(arrayPath);
+
+                if (!Array.isArray(array)) return;
+
+                // Clear current content
+                const template = element.innerHTML;
+                element.innerHTML = '';
+
+                // Process each item
+                array.forEach((item, index) => {
+                    const itemData = {
+                        ...this.data,
+                        [itemName]: item,
+                        $index: index
+                    };
+
+                    const newElement = document.createElement('div');
+                    newElement.innerHTML = template;
+
+                    // Process child directives
+                    new Directives(itemData).process(newElement);
+
+                    // Add processed content
+                    while (newElement.firstChild) {
+                        element.appendChild(newElement.firstChild);
+                    }
+                });
+            }
+
+            // Process all directives
+            process(root) {
+                if (!root) return;
+
+                // Process for directives first
+                const forElements = Array.from(root.querySelectorAll('[--for]:not([--for] [--for])'));
+                forElements.forEach(el => this.processFor(el));
+
+                // Then process text directives
+                const textElements = Array.from(root.querySelectorAll('[--text]:not([--for] [--text])'));
+                textElements.forEach(el => this.processText(el));
+            }
+
+            // Safe path resolution
+            getValueFromPath(path) {
+                if (!path) return '';
+                
+                try {
+                    return path.split('.').reduce((obj, key) => {
+                        return (obj && typeof obj === 'object') ? obj[key] : undefined;
+                    }, this.data);
+                } catch (e) {
+                    console.warn('Path resolution warning:', path, e);
+                    return '';
+                }
+            }
+        }
+
+        // Initial data
+        const data = {
+            title: "Developer Profile",
+            description: "Senior Software Developer",
+            skills: [
+                { name: "JavaScript", level: "Expert" },
+                { name: "Python", level: "Intermediate" },
+                { name: "React", level: "Advanced" }
+            ],
+            projects: [
+                { 
+                    name: "E-commerce Platform",
+                    technologies: ["Node.js", "React", "MongoDB"]
+                },
+                { 
+                    name: "Analytics Dashboard",
+                    technologies: ["Vue.js", "D3.js", "Firebase"]
+                }
+            ]
+        };
+
+        // Setup template
+        const template = `
+            <div class="card">
+                <h1 --text="title"></h1>
+                <p --text="description"></p>
+                
+                <h3>Skills</h3>
+                <div --for="skill in skills">
+                    <span class="tag">
+                        <span --text="skill.name"></span>: 
+                        <span --text="skill.level"></span>
+                    </span>
+                </div>
+
+                <h3>Projects</h3>
+                <div --for="project in projects">
+                    <div class="card">
+                        <h4 --text="project.name"></h4>
+                        <div>
+                            Technologies:
+                            <div --for="tech in project.technologies">
+                                <span class="tag" --text="tech"></span>
                             </div>
                         </div>
-                    `;
+                    </div>
+                </div>
+            </div>
+        `;
 
-                    app.innerHTML = html;
-                }
+        // Function to render with directives
+        function render(data) {
+            const app = document.getElementById('app');
+            if (!app) return;
 
-                // Initial render
-                render();
+            app.innerHTML = template;
+            const directives = new Directives(data);
+            directives.process(app);
+        }
 
-                // Update a skill level every 2 seconds
-                setInterval(() => {
-                    try {
-                        const levels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
-                        const randomSkill = Math.floor(Math.random() * data.skills.length);
-                        const randomLevel = Math.floor(Math.random() * levels.length);
-                        
-                        data.skills[randomSkill].level = levels[randomLevel];
-                        render();
-                    } catch (error) {
-                        console.error('Update error:', error);
-                    }
-                }, 2000);
+        // Initialize and start updates
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initial render
+            render(data);
 
-            } catch (error) {
-                console.error('Initialization error:', error);
-            }
+            // Update skills periodically
+            setInterval(() => {
+                const levels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
+                const randomSkill = Math.floor(Math.random() * data.skills.length);
+                const randomLevel = Math.floor(Math.random() * levels.length);
+                
+                data.skills[randomSkill].level = levels[randomLevel];
+                render(data);
+            }, 2000);
         });
     </script>
 </body>
